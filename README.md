@@ -1,0 +1,1 @@
+![simple simulation schematic.jpg](docs/simple%20simulation%20schematic.jpg)
