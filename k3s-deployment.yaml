@@ -1,0 +1,113 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: machine-iot-sim
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: iot-sim
+  template:
+    metadata:
+      labels:
+        app: iot-sim
+    spec:
+      containers:
+        - name: simulator
+          image: esadik/iot-simulator:latest
+          env:
+            - name: MQTT_BROKER
+              value: "mqtt-broker"
+            - name: MACHINE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: INTERVAL
+              value: "1"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: machine-processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: processor
+  template:
+    metadata:
+      labels:
+        app: processor
+    spec:
+      containers:
+        - name: processor
+          image: esadik/iot-processor:latest
+          env:
+            - name: MQTT_BROKER
+              value: "mqtt-broker"
+            - name: CLIENT_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MAXLEN
+              value: "50"
+          volumeMounts:
+            - mountPath: /app/state
+              name: state-volume
+      volumes:
+        - name: state-volume
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqtt-broker
+spec:
+  selector:
+    app: mqtt
+  ports:
+    - port: 1883
+      targetPort: 1883
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mqtt-broker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt
+  template:
+    metadata:
+      labels:
+        app: mqtt
+    spec:
+      containers:
+        - name: mqtt
+          image: eclipse-mosquitto:2.0
+          ports:
+            - containerPort: 1883
+          volumeMounts:
+            - name: config-volume
+              mountPath: /mosquitto/config
+      volumes:
+        - name: config-volume
+          configMap:
+            name: mosquitto-config
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+data:
+  mosquitto.conf: |
+    persistence true
+    persistence_location /mosquitto/data/
+    allow_anonymous true
+    listener 1883
