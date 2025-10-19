@@ -11,7 +11,7 @@ assignments = {"processor1": set(), "processor2": set()}
 
 client = mqtt.Client()
 
-def on_message(client, userdata, msg):
+def on_message(msg):
     machine_id = msg.topic.split("/")[-1]
     message_counts[machine_id].append(time.time())
 
