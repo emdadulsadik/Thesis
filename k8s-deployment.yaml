@@ -122,10 +122,12 @@ spec:
           emptyDir: {}
 ---
 # AI Scheduler as a Kubernetes cron job
+# AI Scheduler as a Kubernetes CronJob
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: ai-scheduler
+  namespace: default
 spec:
   schedule: "* * * * *"
   jobTemplate:
@@ -139,4 +141,5 @@ spec:
               env:
                 - name: MQTT_BROKER
                   value: "mqtt-broker"
+
 
