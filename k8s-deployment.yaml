@@ -129,7 +129,9 @@ metadata:
   name: ai-scheduler
   namespace: default
 spec:
-  schedule: "* * * * *"
+  schedule: "*/5 * * * *"   # every 5 minutes (adjust as needed)
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       template:
