@@ -121,27 +121,35 @@ spec:
         - name: state-volume
           emptyDir: {}
 ---
-# AI Scheduler as a Kubernetes cron job
-# AI Scheduler as a Kubernetes CronJob
-apiVersion: batch/v1
-kind: CronJob
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: ai-scheduler
   namespace: default
 spec:
-  schedule: "*/5 * * * *"   # every 5 minutes (adjust as needed)
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 1
-  jobTemplate:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-scheduler
+  template:
+    metadata:
+      labels:
+        app: ai-scheduler
     spec:
-      template:
-        spec:
-          restartPolicy: Never
-          containers:
-            - name: ai-scheduler
-              image: esadik/ai-scheduler:latest
-              env:
-                - name: MQTT_BROKER
-                  value: "mqtt-broker"
+      containers:
+        - name: ai-scheduler
+          image: esadik/ai-scheduler:latest
+          imagePullPolicy: Always
+          env:
+            - name: MQTT_BROKER
+              value: "mqtt-broker"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
 
 
