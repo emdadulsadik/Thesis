@@ -18,6 +18,7 @@ while True:
         "vibration": round(random.uniform(0.2, 1.5), 3),
         "load": round(random.uniform(10, 80), 2)
     }
+
     topic = f"data/{machine_id}"
     client.publish(topic, json.dumps(data))
     print(f"[SIM] {machine_id} => {data}")
