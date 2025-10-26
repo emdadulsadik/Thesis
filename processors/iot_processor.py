@@ -1,5 +1,5 @@
 import os, json, time
-import paho.mqtt.client as mqtt
+from paho.mqtt.client import Client
 from paho.mqtt.enums import CallbackAPIVersion
 from collections import deque, defaultdict
 
@@ -30,7 +30,7 @@ def on_message(client, msg):
         buffers[machine_id].append(payload)
         print(f"[{client_id}] Ingested {machine_id}: {payload}")
 
-client = mqtt.Client(CallbackAPIVersion.VERSION1, client_id)
+client = Client(CallbackAPIVersion.VERSION2, client_id)
 client.on_message = on_message
 client.connect(broker, 1883, 60)
 client.subscribe("control/#")
