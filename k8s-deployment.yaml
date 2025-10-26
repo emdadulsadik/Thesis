@@ -136,6 +136,7 @@ spec:
       labels:
         app: ai-scheduler
     spec:
+      serviceAccountName: ai-scheduler-sa
       containers:
         - name: ai-scheduler
           image: esadik/ai-scheduler:latest
@@ -151,5 +152,32 @@ spec:
               cpu: "500m"
               memory: "256Mi"
 
-
-
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-scheduler-sa
+  namespace: default
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ai-scheduler-role
+  namespace: default
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "patch", "update"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ai-scheduler-binding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: ai-scheduler-sa
+roleRef:
+  kind: Role
+  name: ai-scheduler-role
+  apiGroup: rbac.authorization.k8s.io
