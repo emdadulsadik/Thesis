@@ -10,7 +10,7 @@ mqtt_client.connect(broker, 1883, 60)
 config.load_incluster_config()
 apps_v1 = client.AppsV1Api()
 
-DEPLOYMENT_NAME = "machine-iot-sim"
+DEPLOYMENT_NAME = "machine-processor"
 NAMESPACE = "default"
 
 def scale_deployment(new_replicas):
