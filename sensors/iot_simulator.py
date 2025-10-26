@@ -20,7 +20,7 @@ while True:
         "load": round(random.uniform(10, 80), 2)
     }
 
-    topic = f"data/{machine_id}"
+    topic = f"data/machine-{machine_id}"
     client.publish(topic, json.dumps(data))
     print(f"[SIM] {machine_id} => {data}")
     time.sleep(interval)
