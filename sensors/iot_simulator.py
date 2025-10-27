@@ -1,14 +1,17 @@
 import os
 import time
 import random
-import paho.mqtt.client as mqtt
+from paho.mqtt.client import Client
+from paho.mqtt.enums import CallbackAPIVersion
 import json
+import logging
 
+logging.basicConfig(level=logging.INFO)
 machine_id = os.getenv("MACHINE_ID", "machine-unknown")
 broker_host = os.getenv("MQTT_BROKER", "localhost")
 interval = float(os.getenv("INTERVAL", 1.0))
 
-client = mqtt.Client()
+client = Client(CallbackAPIVersion.VERSION2)
 client.connect(broker_host, 1883, 60)
 client.loop_start()
 
@@ -21,5 +24,5 @@ while True:
 
     topic = f"data/{machine_id}"
     client.publish(topic, json.dumps(data))
-    print(f"[SIM] {machine_id} => {data}")
+    logging.info(f"[SIM] {machine_id} => {data}")
     time.sleep(interval)
