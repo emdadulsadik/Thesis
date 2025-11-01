@@ -40,7 +40,6 @@ client.subscribe("control/#")
 client.loop_start()
 
 while True:
-    logging.info(f"[MACHINE-PROCESSOR]")
     for machine_id in assigned:
         buf = buffers[machine_id]
         if buf:

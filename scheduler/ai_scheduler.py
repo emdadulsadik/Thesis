@@ -37,7 +37,6 @@ client.subscribe(f"data/#")
 client.loop_start()
 
 while True:
-    logging.info(f"[AI-SCHED]")
     for m_id in message_counts.keys():
         rate = get_rate(m_id)
         logging.info(f"[AI] {m_id} rate = {rate} msg/min")
