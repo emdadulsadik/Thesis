@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: iot-data-collector
+  namespace: default
+spec:
+  template:
+    metadata:
+      labels:
+        app: iot-data-collector
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: collector
+          image: esadik/iot-data-collector:latest
+          imagePullPolicy: Always
+          env:
+            - name: MQTT_BROKER
+              value: "mqtt-broker"
+            - name: WINDOW
+              value: "30"
+            - name: HORIZON
+              value: "60"
+            - name: OUT_RAW
+              value: "/data/raw_events.jsonl"
+            - name: OUT_FEATURES
+              value: "/data/features.csv"
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+      volumes:
+        - name: data-volume
+          hostPath:
+            path: /mnt/data/iot-training   # local path on edge node
+            type: DirectoryOrCreate
