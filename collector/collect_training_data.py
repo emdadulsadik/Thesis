@@ -1,8 +1,12 @@
-import os, time, json, csv, logging
+import os, time, json, csv, sys, logging
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
 import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
+
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 
 BROKER = os.getenv("MQTT_BROKER", "mqtt-broker")
 OUT_RAW = os.getenv("OUT_RAW", "raw_events.jsonl")
@@ -65,12 +69,14 @@ def on_message(client, userdata, msg):
         save_raw_event({"type":"buffer","ts":ts,"machine":machine_id,"buffer":b})
 
 client = mqtt.Client(CallbackAPIVersion.VERSION2)
+logging.info(f"[COLLECTOR]: Client: {client}")
 client.connect(BROKER,1883,60)
 client.on_message = on_message
 client.subscribe("data/#")
 client.subscribe("metrics/#")
 client.subscribe("buffer/#")
 client.loop_start()
+logging.info(f"[COLLECTOR]: Client: {client}")
 
 # feature extraction loop (writes snapshot per processor approx every WINDOW)
 try:
