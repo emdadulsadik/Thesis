@@ -1,8 +1,8 @@
-import os, json, time, threading, statistics, random, logging, sys
+import os,json,time,threading,statistics,logging,sys, random
 import paho.mqtt.client as mqtt
-from paho.mqtt.enums import CallbackAPIVersion
 from collections import deque
 import psutil
+from paho.mqtt.enums import CallbackAPIVersion
 
 logging.basicConfig(
     level=logging.INFO,
@@ -11,8 +11,10 @@ logging.basicConfig(
 
 BROKER = os.getenv("MQTT_BROKER", "mqtt-broker")
 PROCESSOR_ID = os.getenv("CLIENT_ID", f"processor-{random.randint(1,9999)}")
-DATA_TOPIC = "data/#"
+DATA_TOPIC = "data/#"  # subscribe to all IoT simulator topics
 STATE_TOPIC = f"state/{PROCESSOR_ID}"
+BUFFER_TOPIC = f"buffer/{PROCESSOR_ID}"
+METRICS_TOPIC = f"metrics/{PROCESSOR_ID}"
 MAXLEN = int(os.getenv("MAXLEN", "30"))
 STATE_INTERVAL = 5  # seconds
 
@@ -29,7 +31,6 @@ def on_connect(client, userdata, flags, rc, properties=None):
         client.subscribe(DATA_TOPIC)
     else:
         logging.info(f"[{PROCESSOR_ID}] Connection failed with code {rc}")
-
 
 def on_message(client, userdata, msg):
     global last_publish_time
@@ -49,38 +50,50 @@ def on_message(client, userdata, msg):
 
     now = time.time()
     if now - last_publish_time >= STATE_INTERVAL:
-        publish_state()
+        publish_all()
         last_publish_time = now
 
-
-def publish_state():
+def publish_all():
+    """Publish buffer, metrics, and state JSON messages."""
     if not buffer:
         return
+
     cpu_usage = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory()
     avg_latency = statistics.mean(processing_times) if processing_times else 0
     avg_rate = metrics["processed"] / (time.time() - start_time_global + 1e-6)
 
-    state_payload = {
+    buffer_payload = {
         "processor_id": PROCESSOR_ID,
         "timestamp": time.time(),
         "buffer_size": len(buffer),
         "buffer_capacity": MAXLEN,
+    }
+
+    metrics_payload = {
+        "processor_id": PROCESSOR_ID,
+        "timestamp": time.time(),
         "avg_latency": round(avg_latency, 4),
         "avg_rate": round(avg_rate, 2),
         "cpu_usage": cpu_usage,
         "mem_usage": round(mem.percent, 2),
     }
-    mqtt_client.publish(STATE_TOPIC, json.dumps(state_payload))
-    logging.info(f"[{PROCESSOR_ID}] Published state: {state_payload}")
 
+    # Merge both into a combined state payload
+    state_payload = {**buffer_payload, **metrics_payload}
+
+    mqtt_client.publish(BUFFER_TOPIC, json.dumps(buffer_payload))
+    mqtt_client.publish(METRICS_TOPIC, json.dumps(metrics_payload))
+    mqtt_client.publish(STATE_TOPIC, json.dumps(state_payload))
+
+    logging.info(f"[{PROCESSOR_ID}] Published buffer: {buffer_payload}")
+    logging.info(f"[{PROCESSOR_ID}] Published metrics: {metrics_payload}")
 
 def state_publisher_loop():
-    """Background thread to publish state every few seconds, even if no messages."""
+    """Background thread to publish state even when no new data arrives."""
     while True:
         time.sleep(STATE_INTERVAL)
-        publish_state()
-
+        publish_all()
 
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
@@ -91,7 +104,7 @@ mqtt_client.connect(BROKER, 1883, 60)
 # Track uptime for average rate calculation
 start_time_global = time.time()
 
-# Start background thread for periodic state publishing
+# Start background thread for periodic publishing
 threading.Thread(target=state_publisher_loop, daemon=True).start()
 
 mqtt_client.loop_forever()
