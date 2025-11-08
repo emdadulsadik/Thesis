@@ -17,6 +17,7 @@ BUFFER_TOPIC = f"buffer/{PROCESSOR_ID}"
 METRICS_TOPIC = f"metrics/{PROCESSOR_ID}"
 MAXLEN = int(os.getenv("MAXLEN", "30"))
 STATE_INTERVAL = 5  # seconds
+ASSIGNED_MACHINES = os.getenv("ASSIGNED_MACHINES", "machine1").split(",")
 
 buffer = deque(maxlen=MAXLEN)
 metrics = {"processed": 0, "avg_rate": 0.0, "avg_latency": 0.0}
@@ -68,6 +69,7 @@ def publish_all():
         "timestamp": time.time(),
         "buffer_size": len(buffer),
         "buffer_capacity": MAXLEN,
+        "assigned_machines": ASSIGNED_MACHINES,
     }
 
     metrics_payload = {
@@ -77,6 +79,7 @@ def publish_all():
         "avg_rate": round(avg_rate, 2),
         "cpu_usage": cpu_usage,
         "mem_usage": round(mem.percent, 2),
+        "assigned_machines": ASSIGNED_MACHINES,
     }
 
     # Merge both into a combined state payload
