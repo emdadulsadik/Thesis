@@ -26,10 +26,9 @@ spec:
             - name: OUT_FEATURES
               value: "/data/features.csv"
           volumeMounts:
-            - name: data-volume
+            - name: training-data
               mountPath: /data
       volumes:
-        - name: data-volume
-          hostPath:
-            path: /mnt/data/iot-training   # local path on edge node
-            type: DirectoryOrCreate
+        - name: training-data
+          persistentVolumeClaim:
+            claimName: ai-data-pvc
