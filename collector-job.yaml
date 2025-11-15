@@ -1,13 +1,13 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: iot-data-collector
+  name: collector
   namespace: default
 spec:
   template:
     metadata:
       labels:
-        app: iot-data-collector
+        app: collector
     spec:
       restartPolicy: Never
       containers:

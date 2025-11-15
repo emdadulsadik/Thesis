@@ -1,16 +1,20 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ai-trainer
+  name: trainer
   namespace: default
 spec:
   ttlSecondsAfterFinished: 360
   template:
+    metadata:
+      labels:
+        app: trainer
     spec:
       restartPolicy: Never
       containers:
         - name: trainer
           image: esadik/ai-trainer:latest
+          imagePullPolicy: Always
           volumeMounts:
             - mountPath: /data
               name: training-data
