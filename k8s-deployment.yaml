@@ -153,31 +153,78 @@ spec:
               memory: "256Mi"
 
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-scheduler-role
+  namespace: default
+rules:
+  # Manage deployments and scaling
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+
+  # List, get and watch Pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  # Allow reading events (optional but useful)
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: ai-scheduler-sa
   namespace: default
 ---
-kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: ai-scheduler-role
-  namespace: default
-rules:
-  - apiGroups: ["apps"]
-    resources: ["deployments", "deployments/scale"]
-    verbs: ["get", "list", "patch", "update"]
----
 kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: ai-scheduler-binding
   namespace: default
 subjects:
   - kind: ServiceAccount
     name: ai-scheduler-sa
+    namespace: default
 roleRef:
   kind: Role
   name: ai-scheduler-role
   apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shift-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shift-role
+  namespace: default
+rules:
+  - apiGroups: [""]    # core API group
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "pods"]
+    verbs: ["get", "list", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shift-rolebinding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: shift-sa
+    namespace: default
+roleRef:
+  kind: Role
+  name: shift-role
+  apiGroup: rbac.authorization.k8s.io
+
