@@ -6,18 +6,19 @@ from paho.mqtt.enums import CallbackAPIVersion
 
 logging.basicConfig(
     level=logging.INFO,
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[logging.StreamHandler(sys.stdout)],
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 BROKER = os.getenv("MQTT_BROKER", "mqtt-broker")
-PROCESSOR_ID = os.getenv("CLIENT_ID", f"processor-{random.randint(1,9999)}")
+PROCESSOR_ID = os.getenv("CLIENT_ID")
 DATA_TOPIC = "data/#"  # subscribe to all IoT simulator topics
 STATE_TOPIC = f"state/{PROCESSOR_ID}"
 BUFFER_TOPIC = f"buffer/{PROCESSOR_ID}"
 METRICS_TOPIC = f"metrics/{PROCESSOR_ID}"
 MAXLEN = int(os.getenv("MAXLEN", "30"))
 STATE_INTERVAL = 5  # seconds
-ASSIGNED_MACHINES = os.getenv("ASSIGNED_MACHINES", "machine1").split(",")
+ASSIGNED_MACHINES = os.getenv(f"ASSIGNED_MACHINES_{PROCESSOR_ID.replace('-', '_')}", "").split(",")
 
 buffer = deque(maxlen=MAXLEN)
 metrics = {"processed": 0, "avg_rate": 0.0, "avg_latency": 0.0}

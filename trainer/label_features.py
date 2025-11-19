@@ -3,7 +3,8 @@ import os, logging, sys
 
 logging.basicConfig(
     level=logging.INFO,
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[logging.StreamHandler(sys.stdout)],
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 DATA_DIR = "/data"

@@ -1,24 +1,24 @@
 apiVersion: batch/v1
-kind: Job
+kind: CronJob
 metadata:
   name: trainer
-  namespace: default
 spec:
-  ttlSecondsAfterFinished: 360
-  template:
-    metadata:
-      labels:
-        app: trainer
+  schedule: "*/30 * * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
     spec:
-      restartPolicy: Never
-      containers:
-        - name: trainer
-          image: esadik/ai-trainer:latest
-          imagePullPolicy: Always
-          volumeMounts:
-            - mountPath: /data
-              name: training-data
-      volumes:
-        - name: training-data
-          persistentVolumeClaim:
-            claimName: ai-data-pvc
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: trainer
+              image: esadik/ai-trainer:latest
+              imagePullPolicy: Always
+              volumeMounts:
+                - mountPath: /data
+                  name: training-data
+          volumes:
+            - name: training-data
+              persistentVolumeClaim:
+                claimName: ai-data-pvc
