@@ -6,7 +6,7 @@ from paho.mqtt.enums import CallbackAPIVersion
 import json
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 machine_id = os.getenv("MACHINE_ID", "machine-unknown")
 broker_host = os.getenv("MQTT_BROKER", "localhost")
 interval = float(os.getenv("INTERVAL", 1.0))

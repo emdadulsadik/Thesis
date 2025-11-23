@@ -43,7 +43,7 @@ data:
     persistence true
     persistence_location /mosquitto/data/
     allow_anonymous true
-    listener 1883
+    listener 1883 0.0.0.0
 ---
 apiVersion: v1
 kind: Service
@@ -61,17 +61,17 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: machine-iot-sim
+  name: machine
   namespace: default
 spec:
-  replicas: 3
+  replicas: 5
   selector:
     matchLabels:
-      app: iot-sim
+      app: machine
   template:
     metadata:
       labels:
-        app: iot-sim
+        app: machine
     spec:
       containers:
         - name: simulator
@@ -90,10 +90,10 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: machine-processor
+  name: processor
   namespace: default
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: processor
@@ -151,7 +151,34 @@ spec:
             limits:
               cpu: "500m"
               memory: "256Mi"
+          volumeMounts:
+            - mountPath: /data
+              name: training-data
+      volumes:
+        - name: training-data
+          persistentVolumeClaim:
+            claimName: ai-data-pvc
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-scheduler-role
+  namespace: default
+rules:
+  # Manage deployments and scaling
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "scale", "rollout"]
 
+  # List, get and watch Pods
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec", "pods/attach"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "exec", "logs", "portforward", "attach", "proxy", "evict"]
+
+  # Allow reading events (optional but useful)
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -159,25 +186,93 @@ metadata:
   name: ai-scheduler-sa
   namespace: default
 ---
-kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: ai-scheduler-role
-  namespace: default
-rules:
-  - apiGroups: ["apps"]
-    resources: ["deployments", "deployments/scale"]
-    verbs: ["get", "list", "patch", "update"]
----
 kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: ai-scheduler-binding
   namespace: default
 subjects:
   - kind: ServiceAccount
     name: ai-scheduler-sa
+    namespace: default
 roleRef:
   kind: Role
   name: ai-scheduler-role
   apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shift-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shift-role
+  namespace: default
+rules:
+  - apiGroups: [""]    # core API group
+    resources: ["pods", "pods/exec", "podds/attach"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "exec", "logs", "portforward", "attach", "proxy", "evict"]
+
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "pods"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "scale", "rollout"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shift-rolebinding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: shift-sa
+    namespace: default
+roleRef:
+  kind: Role
+  name: shift-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prewarm-processor
+  labels:
+    app: prewarm-processor
+    mode: prewarm
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: prewarm-processor
+      mode: prewarm
+  template:
+    metadata:
+      labels:
+        app: prewarm-processor
+        mode: prewarm
+    spec:
+      serviceAccountName: ai-scheduler-sa
+      containers:
+      - name: prewarm-processor
+        image: esadik/processor:latest
+        env:
+        - name: PROCESSOR_MODE
+          value: "PREWARM"
+        - name: MQTT_BROKER
+          value: "mqtt-broker"
+        - name: CLIENT_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MAXLEN
+          value: "50"
+        volumeMounts:
+          - mountPath: /app/state
+            name: state-volume
+      volumes:
+        - name: state-volume
+          emptyDir: { }

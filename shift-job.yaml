@@ -1,0 +1,18 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: shift
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 360
+  template:
+    metadata:
+      labels:
+        app: shift
+    spec:
+      serviceAccountName: shift-sa
+      restartPolicy: Never
+      containers:
+        - name: shift
+          image: esadik/shift:latest
+          imagePullPolicy: Always

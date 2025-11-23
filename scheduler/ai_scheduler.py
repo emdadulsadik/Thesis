@@ -1,45 +1,205 @@
-import time, json, os
-from collections import defaultdict, deque
-import paho.mqtt.client as mqtt
-from paho.mqtt.enums import CallbackAPIVersion
-import logging
+import time, os, json, logging, sys, random
+import xgboost as xgb
+import numpy as np
+from initial_scheduler import schedule, wait_for_pods, assign_machines_to_processors
+from kubernetes import client, config
+from kubernetes.stream import stream
 
-logging.basicConfig(level=logging.INFO)
-broker = os.getenv("MQTT_BROKER", "mqtt-broker")
-WINDOW = 30  # seconds
-RATE_THRESHOLD = 15  # messages per window
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[logging.StreamHandler(sys.stdout)],
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
-message_counts = defaultdict(lambda: deque(maxlen=WINDOW))
-assignments = {"processor1": set(), "processor2": set()}
 
-client = mqtt.Client(CallbackAPIVersion.VERSION2)
+############################################
+# LOAD K8S CONFIG
+############################################
+try:
+    config.load_incluster_config()
+    logging.info("[AI-SCHED] Using in-cluster Kubernetes config")
+except:
+    config.load_kube_config()
+    logging.info("[AI-SCHED] Using local .kube/config")
 
-def on_message(client, userdata, msg):
-    machine_id = msg.topic.split("/")[-1]
-    message_counts[machine_id].append(time.time())
-    logging.info(f"[AI-SCHED] received msg. machine: {machine_id}, msg: {msg}")
+v1 = client.CoreV1Api()
+apps = client.AppsV1Api()
 
-def get_rate(machine_id):
-    now = time.time()
-    timestamps = message_counts[machine_id]
-    return len([t for t in timestamps if now - t <= WINDOW])
+############################################
+# MODEL + FEATURE HANDLING
+############################################
 
-def assign(machine_id, processor_id):
-    payload = {"assign": [machine_id]}
-    topic = f"control/{processor_id}"
-    client.publish(topic, json.dumps(payload), retain=True)
-    logging.info(f"[AI] Assigned {machine_id} to {processor_id}")
-    assignments[processor_id].add(machine_id)
+RAW_EVENTS_PATH = "/data/raw_events.jsonl"
+MODEL_PATH = "/data/xgb_model.json"
 
-client.on_message = on_message
-client.connect(broker, 1883, 60)
-client.subscribe(f"data/#")
-client.loop_start()
+FEATURES = [
+    "cpu_usage","mem_usage","buffer_size","buffer_capacity",
+    "avg_latency","avg_rate","temperature","vibration","load"
+]
+
+
+def predict_scale_decision(model, features):
+    metrics = get_latest_metrics(features)
+
+    # ordering is crucial
+    row = [metrics[f] for f in features]
+
+    dmatrix = xgb.DMatrix(
+        np.array([row], dtype=float),
+        feature_names=features
+    )
+
+    prob = float(model.predict(dmatrix)[0])
+
+    return prob
+
+def get_latest_metrics(features: list) -> dict:
+    """Return dict that includes ONLY model-required features."""
+    out = {f: 0.0 for f in features}  # Default to 0.0 for all features
+
+    try:
+        with open(RAW_EVENTS_PATH, "r") as f:
+            # Read the first line of the .jsonl file
+            line = f.readline()
+            if line:  # Ensure there's a line to process
+                obj = json.loads(line.strip())  # Parse the JSON object from the line
+                for f in features:
+                    try:
+                        out[f] = float(obj.get(f, 0.0))
+                    except ValueError:
+                        out[f] = 0.0  # In case of conversion issues
+    except Exception as e:
+        logging.error(f"[AI-SCHED] No {RAW_EVENTS_PATH} found — using zeros {e}")
+
+    return out
+
+
+def load_model():
+    if not os.path.exists(MODEL_PATH):
+        logging.warning("[AI-SCHED] No model found -> prediction disabled.")
+        return None
+
+    model = xgb.Booster()
+    model.load_model(MODEL_PATH)
+    logging.info("[AI-SCHED] XGB model loaded.")
+
+    feature_names = model.feature_names
+    if feature_names is None:
+        raise RuntimeError("Model has no feature names!")
+
+    return model, feature_names
+
+
+############################################
+# PROCESSOR PREWARM + HYDRATION PIPELINE
+############################################
+
+def create_prewarm_processor(prob):
+    """Launch a new processor pod in PREWARM mode."""
+    name = "prewarm-processor"
+    logging.info(f"[AI-SCHED] Creating prewarm processor: {name}")
+
+    try:
+        dep = apps.read_namespaced_deployment(name, "default")
+    except:
+        logging.error("[AI-SCHED] ERROR: prewarm-processor Deployment not found!")
+        return None
+
+    if prob > 0.8:
+        scale_prewarm_processor(3)
+    elif prob > 0.7:
+        scale_prewarm_processor(2)
+    else:
+        scale_prewarm_processor(1)
+
+    return name
+
+def scale_prewarm_processor(count):
+    apps.patch_namespaced_deployment_scale(
+        name="prewarm-processor",
+        namespace="default",
+        body={"spec": {"replicas": count}}
+    )
+    logging.info(f"[AI-SCHED] Scaled prewarm pool to {count}")
+
+def get_prewarm_pods():
+    pods = v1.list_namespaced_pod(
+        namespace="default",
+        label_selector="app=prewarm-processor,mode=prewarm"
+    )
+    return [p.metadata.name for p in pods.items]
+
+def hydrate_prewarm_processor(pod_name):
+    """Send hydration command via K8s exec (or via MQTT if preferred)."""
+    logging.info(f"[AI-SCHED] Hydrating {pod_name}")
+
+    try:
+        exec_command = ["sh", "-c", "echo hydrate >/tmp/hydration_command"]
+        # Using the stream method for executing the command and streaming output
+        response = stream(v1.connect_get_namespaced_pod_exec, pod_name, "default", command=exec_command,
+                          stderr=True, stdin=False, stdout=True, tty=False)
+
+        logging.info(f"[AI-SCHED] Hydration command output: {response}")
+    except Exception as e:
+        logging.error(f"[AI-SCHED] Hydration failed: {e}")
+
+def activate_prewarm_processor(pod_name):
+    """Instruct prewarmed processor to begin accepting machine assignments."""
+    logging.info(f"[AI-SCHED] Activating {pod_name}")
+
+    try:
+        exec_command = ["sh", "-c", "echo activate >/tmp/hydration_command"]
+        # Using the stream method for executing the command and streaming output
+        response = stream(v1.connect_get_namespaced_pod_exec, pod_name, "default", command=exec_command,
+                          stderr=True, stdin=False, stdout=True, tty=False)
+
+        logging.info(f"[AI-SCHED] Activation output: {response}")
+
+    except Exception as e:
+        logging.error(f"[AI-SCHED] Activation failed: {e}")
+
+
+
+########################################################
+# schedule: assign machines to processors.
+########################################################
 
 while True:
-    for m_id in message_counts.keys():
-        rate = get_rate(m_id)
-        logging.info(f"[AI] {m_id} rate = {rate} msg/min")
-        if rate > RATE_THRESHOLD and m_id not in assignments["processor2"]:
-            assign(m_id, "processor2")
-    time.sleep(5)
+    ###### Begin Random scheduling #######
+    schedule()
+    ###### End Random scheduling #######
+
+    ###### Begin AI scheduling #######
+    model, features = load_model()
+    metrics = get_latest_metrics(features)
+
+    if model:
+        prob = predict_scale_decision(model, features)
+        pred = 1 if prob > 0.5 else 0
+    else:
+        pred = 0
+        prob = 0
+
+    logging.info(f"[AI-SCHED] Prediction={pred}, Prob={prob:.3f}")
+
+    if pred == 1 or prob > 0.70:
+        logging.info("[AI-SCHED] AI requests prewarm capacity")
+        pod_name = create_prewarm_processor(prob)
+
+        logging.info("[AI-SCHED] Wait 10 sec for prewarm-processors to rise.")
+        time.sleep(10)
+
+        pod_names = get_prewarm_pods()
+
+        for pod_name in pod_names:
+            hydrate_prewarm_processor(pod_name)
+
+        time.sleep(2)
+
+        for pod_name in pod_names:
+            activate_prewarm_processor(pod_name)
+
+
+    time.sleep(30)
+
+########################################################
