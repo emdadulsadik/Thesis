@@ -151,7 +151,13 @@ spec:
             limits:
               cpu: "500m"
               memory: "256Mi"
-
+          volumeMounts:
+            - mountPath: /data
+              name: training-data
+      volumes:
+        - name: training-data
+          persistentVolumeClaim:
+            claimName: ai-data-pvc
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -162,12 +168,12 @@ rules:
   # Manage deployments and scaling
   - apiGroups: ["apps"]
     resources: ["deployments", "deployments/scale"]
-    verbs: ["get", "list", "watch", "patch", "update"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "scale", "rollout"]
 
   # List, get and watch Pods
   - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
+    resources: ["pods", "pods/exec", "pods/attach"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "exec", "logs", "portforward", "attach", "proxy", "evict"]
 
   # Allow reading events (optional but useful)
   - apiGroups: [""]
@@ -207,12 +213,12 @@ metadata:
   namespace: default
 rules:
   - apiGroups: [""]    # core API group
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
+    resources: ["pods", "pods/exec", "podds/attach"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "exec", "logs", "portforward", "attach", "proxy", "evict"]
 
   - apiGroups: ["apps"]
     resources: ["deployments", "deployments/scale", "pods"]
-    verbs: ["get", "list", "patch", "update"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "scale", "rollout"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -228,3 +234,45 @@ roleRef:
   name: shift-role
   apiGroup: rbac.authorization.k8s.io
 
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prewarm-processor
+  labels:
+    app: prewarm-processor
+    mode: prewarm
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: prewarm-processor
+      mode: prewarm
+  template:
+    metadata:
+      labels:
+        app: prewarm-processor
+        mode: prewarm
+    spec:
+      serviceAccountName: ai-scheduler-sa
+      containers:
+      - name: prewarm-processor
+        image: esadik/processor:latest
+        env:
+        - name: PROCESSOR_MODE
+          value: "PREWARM"
+        - name: MQTT_BROKER
+          value: "mqtt-broker"
+        - name: CLIENT_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MAXLEN
+          value: "50"
+        volumeMounts:
+          - mountPath: /app/state
+            name: state-volume
+      volumes:
+        - name: state-volume
+          emptyDir: { }

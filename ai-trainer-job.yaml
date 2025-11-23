@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: trainer
 spec:
-  schedule: "*/30 * * * *"
+  schedule: "0 * * * *"
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
@@ -13,7 +13,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: trainer
-              image: esadik/ai-trainer:latest
+              image: esadik/trainer:latest
               imagePullPolicy: Always
               volumeMounts:
                 - mountPath: /data

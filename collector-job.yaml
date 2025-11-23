@@ -12,7 +12,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: collector
-          image: esadik/iot-data-collector:latest
+          image: esadik/collector:latest
           imagePullPolicy: Always
           env:
             - name: MQTT_BROKER

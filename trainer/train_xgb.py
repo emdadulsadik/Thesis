@@ -17,20 +17,20 @@ df = pd.read_csv(DATA_PATH)
 
 # Define the updated feature set
 features = [
-    "cpu_usage", "mem_usage",
-    "buffer_size", "buffer_capacity",
-    "avg_latency", "avg_rate",
-    "temperature", "vibration", "load"
+    "cpu_usage", "mem_usage", "buffer_size", "buffer_capacity",
+    "avg_latency", "avg_rate", "temperature", "vibration", "load"
 ]
 
 # Filter available columns dynamically
-features = [f for f in features if f in df.columns]
+for col in features:
+    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
 X = df[features]
-y = df["label"]
+y = df["label"].astype(int)
 
 logging.info(f"[Training] Using features: {features}")
 logging.info(f"[Training] Dataset size: {len(X)} samples")
+logging.info(f"[Training] {df[features].dtypes}")
 
 # Train a simple XGBoost model
 dtrain = xgb.DMatrix(X, label=y)

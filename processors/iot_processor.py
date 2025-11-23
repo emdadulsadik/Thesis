@@ -11,14 +11,19 @@ logging.basicConfig(
 )
 
 BROKER = os.getenv("MQTT_BROKER", "mqtt-broker")
-PROCESSOR_ID = os.getenv("CLIENT_ID")
+PROCESSOR_ID = os.getenv("CLIENT_ID", "unknown")
+HOSTNAME = os.getenv("HOSTNAME", "unknown")
 DATA_TOPIC = "data/#"  # subscribe to all IoT simulator topics
 STATE_TOPIC = f"state/{PROCESSOR_ID}"
 BUFFER_TOPIC = f"buffer/{PROCESSOR_ID}"
 METRICS_TOPIC = f"metrics/{PROCESSOR_ID}"
 MAXLEN = int(os.getenv("MAXLEN", "30"))
 STATE_INTERVAL = 5  # seconds
-ASSIGNED_MACHINES = os.getenv(f"ASSIGNED_MACHINES_{PROCESSOR_ID.replace('-', '_')}", "").split(",")
+ASSIGNED_MACHINES = os.getenv(f"ASSIGNED_MACHINES_{HOSTNAME.replace('-', '_')}", "").split(",")
+
+PROCESSOR_MODE = os.getenv("PROCESSOR_MODE", "ACTIVE")  # ACTIVE | PREWARM
+COMMAND_FILE = "/tmp/hydration_command"
+mode = PROCESSOR_MODE  # runtime mode: ACTIVE, PREWARM, HYDRATING, READY
 
 buffer = deque(maxlen=MAXLEN)
 metrics = {"processed": 0, "avg_rate": 0.0, "avg_latency": 0.0}
@@ -35,7 +40,28 @@ def on_connect(client, userdata, flags, rc, properties=None):
         logging.info(f"[{PROCESSOR_ID}] Connection failed with code {rc}")
 
 def on_message(client, userdata, msg):
-    global last_publish_time
+    global last_publish_time, mode, metrics
+
+    check_commands()
+
+    if mode == "PREWARM":
+        # ignore real processing
+        return
+
+    if msg.topic.startswith("state/"):
+        # when hydrating, load this state
+        if mode == "HYDRATING":
+            try:
+                state = json.loads(msg.payload.decode())
+                buffer.clear()
+                for item in state.get("buffer", []):
+                    buffer.append(item)
+                metrics.update(state.get("metrics", {}))
+                mode = "READY"
+                logging.info("[PROC] Hydration complete → READY")
+            except:
+                logging.error("[PROC] Bad state hydration payload")
+
     start_time = time.time()
     payload = msg.payload.decode()
     try:
@@ -54,6 +80,32 @@ def on_message(client, userdata, msg):
     if now - last_publish_time >= STATE_INTERVAL:
         publish_all()
         last_publish_time = now
+
+############################################
+# HYDRATION + ACTIVATION CHECK
+############################################
+def check_commands():
+    global mode
+    if not os.path.exists(COMMAND_FILE):
+        logging.info(f"[PROC] command file {COMMAND_FILE} not found.")
+        return
+
+    try:
+        with open(COMMAND_FILE,"r") as f:
+            cmd = f.read().strip()
+        os.remove(COMMAND_FILE)
+    except:
+        return
+
+    if cmd == "hydrate" and mode == "PREWARM":
+        logging.info("[PROC] HYDRATE command received")
+        mode = "HYDRATING"
+        # request state from another processor
+        mqtt_client.publish("processor/state_request", PROCESSOR_ID)
+
+    if cmd == "activate" and mode == "READY":
+        logging.info("[PROC] ACTIVATE command received")
+        mode = "ACTIVE"
 
 def publish_all():
     """Publish buffer, metrics, and state JSON messages."""

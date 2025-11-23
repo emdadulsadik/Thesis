@@ -38,27 +38,40 @@ def write_jsonl(record):
 
 
 def merge_state(processor_id, update):
-    """Merge new data into processor state and persist it."""
-    current = processor_state.get(
-        processor_id,
-        {
-            "timestamp": time.time(),
-            "processor_id": processor_id,
-            "cpu_usage": 0.0,
-            "mem_usage": 0.0,
-            "buffer_size": 0,
-            "buffer_capacity": 0,
-            "avg_latency": 0.0,
-            "avg_rate": 0.0,
-            "assigned_machines": [],
-        },
-    )
+    """Merge partial updates and write FULL feature snapshot."""
+
+    base = {
+        "timestamp": time.time(),
+        "processor_id": processor_id,
+        "cpu_usage": 0.0,
+        "mem_usage": 0.0,
+        "buffer_size": 0,
+        "buffer_capacity": 0,
+        "avg_latency": 0.0,
+        "avg_rate": 0.0,
+        "temperature": 0.0,
+        "vibration": 0.0,
+        "load": 0.0,
+        "assigned_machines": []
+    }
+
+    # Load last known state or base
+    current = processor_state.get(processor_id, base.copy())
+
+    # Apply update
     current.update(update)
+
+    # ALWAYS refresh timestamp
     current["timestamp"] = time.time()
+
+    # Save state
     processor_state[processor_id] = current
 
-    write_csv(current)
-    write_jsonl(current)
+    clean_state = sanitize_state(current.copy())
+
+    # Write FULL snapshot, not partial update
+    write_csv(clean_state)
+    write_jsonl(clean_state)
 
 
 def on_message(client, userdata, msg):
@@ -96,6 +109,19 @@ def on_message(client, userdata, msg):
     else:
         logging.info(f"[Collector] Ignored unknown topic: {topic}")
 
+
+def sanitize_state(d):
+    for k, v in d.items():
+        if isinstance(v, list):
+            continue
+        if v is None:
+            d[k] = 0.0
+        elif isinstance(v, str):
+            try:
+                d[k] = float(v)
+            except:
+                d[k] = 0.0
+    return d
 
 def on_connect(client, userdata, flags, rc, properties=None):
     logging.info(f"[Collector] Connected to MQTT broker at {MQTT_BROKER}:{MQTT_PORT}")
