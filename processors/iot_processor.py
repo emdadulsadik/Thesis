@@ -22,7 +22,7 @@ STATE_INTERVAL = 5  # seconds
 ASSIGNED_MACHINES = os.getenv(f"ASSIGNED_MACHINES_{HOSTNAME.replace('-', '_')}", "").split(",")
 
 PROCESSOR_MODE = os.getenv("PROCESSOR_MODE", "ACTIVE")  # ACTIVE | PREWARM
-COMMAND_FILE = "/tmp/hydration_command"
+PREWARM_TOPIC = f"prewarm/{PROCESSOR_ID}/#"
 mode = PROCESSOR_MODE  # runtime mode: ACTIVE, PREWARM, HYDRATING, READY
 
 buffer = deque(maxlen=MAXLEN)
@@ -36,13 +36,14 @@ def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         logging.info(f"[{PROCESSOR_ID}] Connected to MQTT broker at {BROKER}")
         client.subscribe(DATA_TOPIC)
+        client.subscribe(PREWARM_TOPIC)
     else:
         logging.info(f"[{PROCESSOR_ID}] Connection failed with code {rc}")
 
 def on_message(client, userdata, msg):
     global last_publish_time, mode, metrics
 
-    check_commands()
+    check_commands(msg)
 
     if mode == "PREWARM":
         # ignore real processing
@@ -84,24 +85,23 @@ def on_message(client, userdata, msg):
 ############################################
 # HYDRATION + ACTIVATION CHECK
 ############################################
-def check_commands():
+def check_commands(msg):
     global mode
-    if not os.path.exists(COMMAND_FILE):
-        logging.info(f"[PROC] command file {COMMAND_FILE} not found.")
-        return
 
-    try:
-        with open(COMMAND_FILE,"r") as f:
-            cmd = f.read().strip()
-        os.remove(COMMAND_FILE)
-    except:
-        return
+    topic = msg.topic
+    cmd = ""
+
+    if topic.endswith("/hydrate"):
+        cmd = "hydrate"
+        logging.info("[PROC] Hydration command received")
+
+    elif topic.endswith("/activate"):
+        cmd = "activate"
+        logging.info("[PROC] Activation command received")
 
     if cmd == "hydrate" and mode == "PREWARM":
         logging.info("[PROC] HYDRATE command received")
         mode = "HYDRATING"
-        # request state from another processor
-        mqtt_client.publish("processor/state_request", PROCESSOR_ID)
 
     if cmd == "activate" and mode == "READY":
         logging.info("[PROC] ACTIVATE command received")

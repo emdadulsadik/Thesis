@@ -213,7 +213,7 @@ metadata:
   namespace: default
 rules:
   - apiGroups: [""]    # core API group
-    resources: ["pods", "pods/exec", "podds/attach"]
+    resources: ["pods", "pods/exec", "pods/attach"]
     verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "exec", "logs", "portforward", "attach", "proxy", "evict"]
 
   - apiGroups: ["apps"]
