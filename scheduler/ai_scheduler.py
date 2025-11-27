@@ -1,15 +1,19 @@
-import time, os, json, logging, sys, random
+import time, os, json, logging, sys
 import xgboost as xgb
 import numpy as np
-from initial_scheduler import schedule, wait_for_pods, assign_machines_to_processors
+from initial_scheduler import schedule
 from kubernetes import client, config
-from kubernetes.stream import stream
+import paho.mqtt.client as mqtt
+from paho.mqtt.enums import CallbackAPIVersion
+from benchmark_collector import benchmark_cold_start_deployment, append_benchmark
 
 logging.basicConfig(
     level=logging.INFO,
     handlers=[logging.StreamHandler(sys.stdout)],
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+mqtt_client = mqtt.Client(callback_api_version=CallbackAPIVersion.VERSION2)
 
 
 ############################################
@@ -130,33 +134,26 @@ def get_prewarm_pods():
     return [p.metadata.name for p in pods.items]
 
 def hydrate_prewarm_processor(pod_name):
-    """Send hydration command via K8s exec (or via MQTT if preferred)."""
+    """Send hydration command via MQTT"""
     logging.info(f"[AI-SCHED] Hydrating {pod_name}")
 
     try:
-        exec_command = ["sh", "-c", "echo hydrate >/tmp/hydration_command"]
-        # Using the stream method for executing the command and streaming output
-        response = stream(v1.connect_get_namespaced_pod_exec, pod_name, "default", command=exec_command,
-                          stderr=True, stdin=False, stdout=True, tty=False)
-
-        logging.info(f"[AI-SCHED] Hydration command output: {response}")
+        hydration_topic = f"prewarm/{pod_name}/hydrate"
+        mqtt_client.publish(hydration_topic, "1")
+        logging.info(f"[AI-SCHED] Hydration published in the: {hydration_topic} topic")
     except Exception as e:
-        logging.error(f"[AI-SCHED] Hydration failed: {e}")
+        logging.error(f"[AI-SCHED] Hydration publishing failed: {e}")
 
 def activate_prewarm_processor(pod_name):
     """Instruct prewarmed processor to begin accepting machine assignments."""
     logging.info(f"[AI-SCHED] Activating {pod_name}")
 
     try:
-        exec_command = ["sh", "-c", "echo activate >/tmp/hydration_command"]
-        # Using the stream method for executing the command and streaming output
-        response = stream(v1.connect_get_namespaced_pod_exec, pod_name, "default", command=exec_command,
-                          stderr=True, stdin=False, stdout=True, tty=False)
-
-        logging.info(f"[AI-SCHED] Activation output: {response}")
-
+        activation_topic = f"prewarm/{pod_name}/activate"
+        mqtt_client.publish(activation_topic, "1")
+        logging.info(f"[AI-SCHED] Activation published in the: {activation_topic} topic")
     except Exception as e:
-        logging.error(f"[AI-SCHED] Activation failed: {e}")
+        logging.error(f"[AI-SCHED] Activation publishing failed: {e}")
 
 
 
@@ -182,7 +179,10 @@ while True:
 
     logging.info(f"[AI-SCHED] Prediction={pred}, Prob={prob:.3f}")
 
-    if pred == 1 or prob > 0.70:
+    logging.info("[AI-SCHED] Start cold benchmark.")
+    benchmark_cold_start_deployment()
+
+    if pred == 1 or prob > 0:
         logging.info("[AI-SCHED] AI requests prewarm capacity")
         pod_name = create_prewarm_processor(prob)
 
@@ -194,12 +194,18 @@ while True:
         for pod_name in pod_names:
             hydrate_prewarm_processor(pod_name)
 
-        time.sleep(2)
+        time.sleep(5)
+
+        logging.info("[AI-SCHED] Start prewarm benchmark.")
+        start = time.time()
 
         for pod_name in pod_names:
             activate_prewarm_processor(pod_name)
+            finish = time.time()
+            duration_ms = (finish - start) * 1000.0
+            append_benchmark("prewarm", duration_ms)
+            logging.info(f"[AI-SCHED] Prewarm benchmark proc: {pod_name}: time_ms={int(duration_ms)}")
 
-
-    time.sleep(30)
+    time.sleep(300)
 
 ########################################################

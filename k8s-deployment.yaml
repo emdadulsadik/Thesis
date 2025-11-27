@@ -74,8 +74,8 @@ spec:
         app: machine
     spec:
       containers:
-        - name: simulator
-          image: esadik/iot-simulator:latest
+        - name: machine
+          image: esadik/machine:latest
           env:
             - name: MQTT_BROKER
               value: "mqtt-broker"
@@ -104,7 +104,7 @@ spec:
     spec:
       containers:
         - name: processor
-          image: esadik/iot-processor:latest
+          image: esadik/processor:latest
           env:
             - name: MQTT_BROKER
               value: "mqtt-broker"
@@ -213,7 +213,7 @@ metadata:
   namespace: default
 rules:
   - apiGroups: [""]    # core API group
-    resources: ["pods", "pods/exec", "podds/attach"]
+    resources: ["pods", "pods/exec", "pods/attach"]
     verbs: ["create", "get", "list", "watch", "patch", "update", "delete", "deletecollection", "exec", "logs", "portforward", "attach", "proxy", "evict"]
 
   - apiGroups: ["apps"]
