@@ -1,10 +1,11 @@
-import time, os, json, logging, sys, random
+import time, os, json, logging, sys
 import xgboost as xgb
 import numpy as np
-from initial_scheduler import schedule, wait_for_pods, assign_machines_to_processors
+from initial_scheduler import schedule
 from kubernetes import client, config
 import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
+from benchmark_collector import benchmark_cold_start_deployment, append_benchmark
 
 logging.basicConfig(
     level=logging.INFO,
@@ -178,7 +179,10 @@ while True:
 
     logging.info(f"[AI-SCHED] Prediction={pred}, Prob={prob:.3f}")
 
-    if pred == 1 or prob > 0.70:
+    logging.info("[AI-SCHED] Start cold benchmark.")
+    benchmark_cold_start_deployment()
+
+    if pred == 1 or prob > 0:
         logging.info("[AI-SCHED] AI requests prewarm capacity")
         pod_name = create_prewarm_processor(prob)
 
@@ -190,11 +194,17 @@ while True:
         for pod_name in pod_names:
             hydrate_prewarm_processor(pod_name)
 
-        time.sleep(2)
+        time.sleep(5)
+
+        logging.info("[AI-SCHED] Start prewarm benchmark.")
+        start = time.time()
 
         for pod_name in pod_names:
             activate_prewarm_processor(pod_name)
-
+            finish = time.time()
+            duration_ms = (finish - start) * 1000.0
+            append_benchmark("prewarm", duration_ms)
+            logging.info(f"[AI-SCHED] Prewarm benchmark proc: {pod_name}: time_ms={int(duration_ms)}")
 
     time.sleep(300)
 
