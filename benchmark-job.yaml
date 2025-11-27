@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: benchmark
+spec:
+  ttlSecondsAfterFinished: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: benchmark
+        image: esadik/benchmark:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /data
+          name: training-data
+      volumes:
+      - name: training-data
+        persistentVolumeClaim:
+          claimName: ai-data-pvc
