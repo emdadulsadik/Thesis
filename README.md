@@ -1,9 +1,4 @@
 ![simulation_schematic.svg](docs/simulation_schematic.svg)
-
-## Simulated IoT sensor messages:
-
-https://github.com/user-attachments/assets/4ea22da4-1ff0-4f20-8b80-0d8355aa505f
-
 ## Comprehensive Setup Guide
 
 This guide provides the necessary steps to set up the local Kubernetes environment, configure resources, start the application, run benchmarks, and access the persistent volume data using the pvc-server component.
@@ -294,3 +289,6 @@ minikube stop && minikube delete && minikube start
 
 After this, we must re-apply all Kubernetes manifests 
 (`kubectl apply -f .`) to restart the application components.
+
+## Simulated IoT sensor messages:
+https://github.com/user-attachments/assets/4ea22da4-1ff0-4f20-8b80-0d8355aa505f
