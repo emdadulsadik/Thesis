@@ -10,16 +10,16 @@ https://github.com/user-attachments/assets/4ea22da4-1ff0-4f20-8b80-0d8355aa505f
 This guide provides the necessary steps to set up the local Kubernetes environment, configure resources, start the application, run benchmarks, and access the persistent volume data using the pvc-server component.
 
 ### Installation of Prerequisites (Mac / Windows / Linux)
-You will need a container runtime (Docker/Podman), the Kubernetes CLI (kubectl), and Minikube.
+We will need a container runtime (Docker/Podman), the Kubernetes CLI (kubectl), and Minikube.
 
 #### Docker (Container Runtime)
 Docker is the easiest way to manage Minikube dependencies.
 
 
-| OS | Instructions                                                                                                                                                                              |
-| ------------- |-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Mac/Windows | Download and install Docker Desktop from the official Docker website. Ensure it is running before proceeding.                                                                             |
-| Linux  | Install Docker via your distribution's package manager (e.g., sudo apt install docker.io on Debian/Ubuntu). Ensure your user is added to the docker group: sudo usermod -aG docker $USER. |
+| OS | Instructions                                                                                                                                                                            |
+| ------------- |-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Mac/Windows | Download and install Docker Desktop from the official Docker website. Ensure it is running before proceeding.                                                                           |
+| Linux  | Install Docker via our distribution's package manager (e.g., sudo apt install docker.io on Debian/Ubuntu). Ensure our user is added to the docker group: sudo usermod -aG docker $USER. |
 
 
 
@@ -29,7 +29,7 @@ Docker is the easiest way to manage Minikube dependencies.
 | ------------- |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Mac  | `brew install kubectl`                                                                                                                                                                                                                                                                                   |
 | Windows  | Use Chocolatey: `choco install kubernetes-cli`                                                                                                                                                                                                                                                           |
-| Linux  | Download the binary: `curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl` <br/> <br/> and move it to your PATH: `sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl` |
+| Linux  | Download the binary: `curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl` <br/> <br/> and move it to our PATH: `sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl` |
 
 
 #### Minikube (Local Kubernetes Cluster)
@@ -38,14 +38,14 @@ Docker is the easiest way to manage Minikube dependencies.
 | ------------- |-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Mac  | `brew install minikube`                                                                                                                                                                                     |
 | Windows  | (Chocolatey) `choco install minikube`                                                                                                                                                                       |
-| Linux  | Download the binary: `curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64` <br/><br/> and move it to your PATH: `sudo install minikube-linux-amd64 /usr/local/bin/minikube` |
+| Linux  | Download the binary: `curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64` <br/><br/> and move it to our PATH: `sudo install minikube-linux-amd64 /usr/local/bin/minikube` |
 
 
 ### Minikube and Docker Configuration
-Before starting, it is crucial to allocate enough resources for your Minikube VM, especially for thesis-level benchmarking, which is often resource-intensive.
+Before starting, it is crucial to allocate enough resources for our Minikube VM, especially for thesis-level benchmarking, which is often resource-intensive.
 
 #### Stopping and Deleting Previous Clusters
-If you have an old Minikube cluster, it's best to start fresh:
+If we have an old Minikube cluster, it's best to start fresh:
 
 ```shell
 minikube stop
@@ -55,7 +55,7 @@ minikube delete
 #### Starting Minikube with Resources
 Based on common requirements for Kubernetes benchmarking, 
 we will assign 8GB of memory and 4 CPUs. 
-Adjust these values based on your host machine's resources. 
+Adjust these values based on our host machine's resources. 
 We will also use the docker driver for better integration.
 ##### Start Minikube with 8GB memory and 4 CPUs
 
@@ -70,9 +70,9 @@ minikube status
 ```
 
 ##### Connecting Docker to Minikube's Daemon
-If the project requires building custom images or ensures Minikube uses the same image cache as your local Docker environment, run this command:
+If the project requires building custom images or ensures Minikube uses the same image cache as our local Docker environment, run this command:
 
-##### Set your shell environment to point to the Minikube Docker daemon
+##### Set our shell environment to point to the Minikube Docker daemon
 
 ```eval $(minikube docker-env)```
 
@@ -88,7 +88,7 @@ cd Thesis
 
 #### Apply the Manifests
 Assuming all the necessary Kubernetes resources (Deployments, Services, PVCs, ConfigMaps) 
-are in YAML files in your current directory, use kubectl apply.
+are in YAML files in our current directory, use kubectl apply.
 
 Execute deployment, jobs and pvc manifests in the correct order: 
 
@@ -114,13 +114,13 @@ kubectl apply -f pvc-server.yaml && minikube service pvc-server
 4. The ai-trainer-job.yaml is to train the simple XGB model. It essentially does two things: labels the features (label_features.py) and trains the model (train_xgb.py)
 
 
-In case there are issues with the benchmark or for any reason you would like to reconfig and relaunch, execute: 
+In case there are issues with the benchmark or for any reason we would like to reconfig and relaunch, execute: 
 
 kubectl delete pod,svc pvc-server && kubectl delete deployment pvc-server
 
 
 #### Verify Startup
-Check the status of your Pods. All Pods (including pvc-server) should eventually show a status of Running and READY 1/1.
+Check the status of our Pods. All Pods (including pvc-server) should eventually show a status of Running and READY 1/1.
 
 ```shell
 kubectl get pods
@@ -144,7 +144,7 @@ The benchmark process should generate output files, including the benchmark_plot
 ### Browsing the PVC Data
 
 The pvc-server service is designed to access and serve the data from the PVC, 
-allowing you to view your results, including benchmark_plot.png.
+allowing us to view our results, including benchmark_plot.png.
 
 #### Access the Plot
 After executing the 
@@ -158,8 +158,8 @@ on the localhost with an appropriate dynamically generated http port.
 Because we configured the pvc-server with `autoindex on;` 
 (directory listing), we should see a list of files in the PVC's root directory.
 Click on the link corresponding to the file: `benchmark_plot.png`.
-The image should display directly in your browser.
-If you encounter any issues with the plot access, 
+The image should display directly in our browser.
+If we encounter any issues with the plot access, 
 ensure the benchmark ran successfully and the file was written to 
 the mounted PVC path (`/usr/share/nginx/html`).
 
