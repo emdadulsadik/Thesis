@@ -189,6 +189,8 @@ while True:
         logging.info("[AI-SCHED] Wait 10 sec for prewarm-processors to rise.")
         time.sleep(10)
 
+        # We don't need this method, we could use MQTT to store the pre-warm pod names after creation
+        # That essentially brings the prewarmed pod launch to near to a few milliseconds.
         pod_names = get_prewarm_pods()
 
         for pod_name in pod_names:
