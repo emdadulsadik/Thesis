@@ -15,12 +15,10 @@ spec:
       containers:
       - name: pvc-server
         image: nginx:alpine
-        # This command chain executes setup (chown/chmod) and then starts Nginx in the foreground.
         command: [ "/bin/sh" ]
         args:
           - "-c"
           - "chown -R nginx:nginx /usr/share/nginx/html && chmod -R 755 /usr/share/nginx/html && exec nginx -g 'daemon off;'"
-        # Run as root (UID 0) to allow the chown/chmod commands to execute on the volume.
         securityContext:
           runAsUser: 0
         ports:
@@ -28,7 +26,6 @@ spec:
         volumeMounts:
         - name: training-data
           mountPath: /usr/share/nginx/html
-        # Mount the custom configuration file
         - name: nginx-config-volume
           mountPath: /etc/nginx/conf.d/default.conf
           subPath: default.conf
@@ -55,10 +52,7 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 80
-      # --- FIX FOR FIXED PORT ---
-      # This explicitly sets the external port on the Minikube node's IP.
       nodePort: 30080
-      # --------------------------
   type: NodePort
 
 ---
